@@ -1,0 +1,119 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+ 
+// WiFi parameters
+#define WIFISSID "XXXXXX"            // Put your WifiSSID here
+#define PASSWORD "XXXXXX"        // Put your wifi password here
+ 
+// Ubidots Device Parameters
+#define TOKEN "XXXXXXXXXX" // Put your Ubidots' TOKEN
+#define MQTT_CLIENT_NAME "XXXXXXXXXX" // MQTT client Name, please enter your own 8-12 alphanumeric character ASCII string.
+                                    //it should be a random and unique ascii string and different from all other devices
+ 
+// Ubidots Device & Variables label - read from related device on your Ubidot account
+#define DEVICE_LABEL "XXXXXXXXXXXX" // Assign the device (API) label
+#define VARIABLE_LABEL "XXXXXXXXXXXXXXX" // Assign the variable (API) label
+#define VARIABLE_LABEL_SUBSCRIBE "XXXXXXXXXXXX" // Assign the variable (API) label
+ 
+#define led // Internal LED of ESP32 board
+char mqttBroker[]  = "things.ubidots.com";
+char payload[100];
+char topic[150];
+char topicSubscribe[100];
+char str_sensor[10];      // Space to store values to send
+ 
+// Auxiliary Functions
+WiFiClient ubidots;
+PubSubClient client(ubidots);
+ 
+void reconnect() {  
+  while (!client.connected()) {                       // Loop until we're reconnected
+    Serial.println("Attempting MQTT connection...");
+   
+    // Attemp to connect
+    if (client.connect(MQTT_CLIENT_NAME, TOKEN, "")) {
+      Serial.println("Connected");
+      client.subscribe(topicSubscribe);
+    } else {
+      Serial.print("Failed, rc=");
+      Serial.print(client.state());
+      Serial.println(" try again in 2 seconds");      
+      delay(2000);    // Wait 2 seconds before retrying
+    }
+  }
+}
+
+void callback(char* topic, byte* payload, unsigned int length) {  
+  char p[length + 1];
+  memcpy(p, payload, length);
+  p[length] = NULL;
+ String message(p);
+  
+  if (message == "1.0")            // Code to control LED
+    {
+      Serial.println("LED LIGHT ON");
+     digitalWrite(led, HIGH);
+     }
+  else  
+    {
+      Serial.println("LED LIGHT OFF");
+       digitalWrite(led, LOW);
+    }
+ 
+   Serial.write(payload, length);
+   Serial.println();
+}
+
+// the setup function runs once when you press reset or power the board
+ 
+void setup() {
+  Serial.begin(115200);
+  WiFi.begin(WIFISSID, PASSWORD);  
+  pinMode(led, OUTPUT);         // Assign the pin as OUTPUT
+ 
+  Serial.println();
+  Serial.print("Wait for WiFi...");
+ 
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+ 
+  Serial.println("");
+  Serial.println("WiFi Connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+  client.setServer(mqttBroker, 1883);  // setServer(cloud_provider, port)
+  client.setCallback(callback);
+ 
+  sprintf(topicSubscribe, "/v1.6/devices/%s/%s/lv", DEVICE_LABEL, VARIABLE_LABEL_SUBSCRIBE);  
+  client.subscribe(topicSubscribe);
+}
+
+ // the loop function runs over and over again forever
+
+// Main Program
+void loop() {
+  if (!client.connected()) {
+    client.subscribe(topicSubscribe);  
+    reconnect();
+  }
+ 
+  sprintf(topic, "%s%s", "/v1.6/devices/", DEVICE_LABEL);
+  sprintf(payload, "%s", ""); // Cleans the payload
+  sprintf(payload, "{\"%s\":", VARIABLE_LABEL, VARIABLE_LABEL_SUBSCRIBE); // Adds the variable label
+ 
+  float sensor = hallRead();
+  Serial.print("Value of Sensor is: ");Serial.println(sensor);
+ 
+  /* 4 is mininum width, 2 is precision; float value is copied onto str_sensor*/
+  dtostrf(sensor, 4, 2, str_sensor);
+
+ Serial.print("PAYLOAD BEFORE: ");Serial.println(payload);
+  sprintf(payload, "%s {\"value\": %s}}", payload, str_sensor); // Adds the value
+  Serial.print("PAYLOAD AFTER: ");Serial.println(payload);
+  Serial.println("Publishing data to Ubidots Cloud");
+  client.publish(topic, payload);
+  client.loop();
+  delay(1000);
+}
