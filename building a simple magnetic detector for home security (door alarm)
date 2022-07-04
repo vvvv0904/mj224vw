@@ -1,36 +1,51 @@
+// Include Libraries 
 #include <WiFi.h>
 #include <PubSubClient.h>
- 
-// WiFi parameters
-#define WIFISSID "XXXXXX"            // Put your WifiSSID here
-#define PASSWORD "XXXXXX"        // Put your wifi password here
- 
-// Ubidots Device Parameters
-#define TOKEN "XXXXXXXXXX" // Put your Ubidots' TOKEN
-#define MQTT_CLIENT_NAME "XXXXXXXXXX" // MQTT client Name, please enter your own 8-12 alphanumeric character ASCII string.
-                                    //it should be a random and unique ascii string and different from all other devices
- 
-// Ubidots Device & Variables label - read from related device on your Ubidot account
-#define DEVICE_LABEL "XXXXXXXXXXXX" // Assign the device (API) label
-#define VARIABLE_LABEL "XXXXXXXXXXXXXXX" // Assign the variable (API) label
-#define VARIABLE_LABEL_SUBSCRIBE "XXXXXXXXXXXX" // Assign the variable (API) label
- 
-#define led // Internal LED of ESP32 board
+
+// Define WiFi, Ubidots's Token, MQTT Client Name, Device Label, Variable Label
+#define WIFISSID "YOUR_SSID"            
+#define PASSWORD "YOUR_PASSWORD"        
+#define TOKEN "Your_Ubidots_TOKEN" 
+#define MQTT_CLIENT_NAME "Random_Client_Name" 
+#define DEVICE_LABEL "the_device_API_label" 
+#define VARIABLE_LABEL "the_variable_API_label" 
+#define VARIABLE_LABEL_SUBSCRIBE "the_variable_API_label " 
+#define led 
+
 char mqttBroker[]  = "things.ubidots.com";
 char payload[100];
 char topic[150];
 char topicSubscribe[100];
-char str_sensor[10];      // Space to store values to send
+char str_sensor[10]; 
  
-// Auxiliary Functions
 WiFiClient ubidots;
 PubSubClient client(ubidots);
+
+void callback(char* topic, byte* payload, unsigned int length) {  
+  char p[length + 1];
+  memcpy(p, payload, length);
+  p[length] = NULL;
+  String message(p);
+  if (message == "1.0")            // Code to control LED
+    {
+      Serial.println("LED LIGHT ON");
+      digitalWrite(led, HIGH);
+     }
+  else  
+    {
+      Serial.println("LED LIGHT OFF");
+      digitalWrite(led, LOW);
+    }
  
-void reconnect() {  
-  while (!client.connected()) {                       // Loop until we're reconnected
+   Serial.write(payload, length);
+   Serial.println();
+}
+
+void reconnect() { 
+  // Loop until we're reconnected 
+  while (!client.connected()) {                       
     Serial.println("Attempting MQTT connection...");
    
-    // Attemp to connect
     if (client.connect(MQTT_CLIENT_NAME, TOKEN, "")) {
       Serial.println("Connected");
       client.subscribe(topicSubscribe);
@@ -43,40 +58,21 @@ void reconnect() {
   }
 }
 
-void callback(char* topic, byte* payload, unsigned int length) {  
-  char p[length + 1];
-  memcpy(p, payload, length);
-  p[length] = NULL;
- String message(p);
-  
-  if (message == "1.0")            // Code to control LED
-    {
-      Serial.println("LED LIGHT ON");
-     digitalWrite(led, HIGH);
-     }
-  else  
-    {
-      Serial.println("LED LIGHT OFF");
-       digitalWrite(led, LOW);
-    }
- 
-   Serial.write(payload, length);
-   Serial.println();
-}
 
-// the setup function runs once when you press reset or power the board
- 
+// the setup function runs once when you click the reset button or power the board
+
 void setup() {
   Serial.begin(115200);
   WiFi.begin(WIFISSID, PASSWORD);  
-  pinMode(led, OUTPUT);         // Assign the pin as OUTPUT
- 
+  // Assign the pin as OUTPUT
+  pinMode(led, OUTPUT);
+          
   Serial.println();
   Serial.print("Wait for WiFi...");
  
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
-    delay(1000);
+    delay(500);
   }
  
   Serial.println("");
@@ -90,9 +86,6 @@ void setup() {
   client.subscribe(topicSubscribe);
 }
 
- // the loop function runs over and over again forever
-
-// Main Program
 void loop() {
   if (!client.connected()) {
     client.subscribe(topicSubscribe);  
@@ -103,9 +96,10 @@ void loop() {
   sprintf(payload, "%s", ""); // Cleans the payload
   sprintf(payload, "{\"%s\":", VARIABLE_LABEL, VARIABLE_LABEL_SUBSCRIBE); // Adds the variable label
  
+  val = hallRead();
   float sensor = hallRead();
-  Serial.print("Value of Sensor is: ");Serial.println(sensor);
- 
+  Serial.print("Value of Sensor is: ");
+  Serial.println(sensor);
   /* 4 is mininum width, 2 is precision; float value is copied onto str_sensor*/
   dtostrf(sensor, 4, 2, str_sensor);
 
